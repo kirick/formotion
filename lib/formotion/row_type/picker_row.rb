@@ -34,6 +34,11 @@ module Formotion
       end
 
       def pickerView(pickerView, numberOfRowsInComponent:component)
+        ##################################
+        if !self.row.value && row.items
+          self.row.value = row.items[0]
+        end
+        ##################################
         self.items.size
       end
 

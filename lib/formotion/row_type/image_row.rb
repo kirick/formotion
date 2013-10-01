@@ -10,15 +10,37 @@ module Formotion
 
       include BW::KVO
 
+      ##################################
+      # 10/1/13 ksi
+      attr_accessor :changed
+      ##################################
+
       IMAGE_VIEW_TAG=1100
 
+      ##################################
+      # 10/1/13 ksi
+      def changed?
+        @changed
+      end
+      ##################################
+
       def build_cell(cell)
+        ##################################
+        # 10/1/13 ksi
+        @changed = false
+        ##################################
+
         cell.selectionStyle = self.row.selection_style || UITableViewCellSelectionStyleBlue
         # only show the "plus" when editable
         add_plus_accessory(cell) if row.editable?
 
         observe(self.row, "value") do |old_value, new_value|
-          @image_view.image = new_value
+          ##################################
+          # 10/1/13 ksi
+          #### @image_view.image = new_value
+          ##################################
+          @image_view.image = new_value unless new_value.class.to_s == "String"
+
           if new_value
             self.row.row_height = 200
             cell.accessoryView = cell.editingAccessoryView = nil
@@ -58,15 +80,48 @@ module Formotion
         if !row.editable?
           return
         end
-        @action_sheet = UIActionSheet.alloc.init
-        @action_sheet.delegate = self
 
-        @action_sheet.destructiveButtonIndex = (@action_sheet.addButtonWithTitle DELETE) if row.value
-        @action_sheet.addButtonWithTitle TAKE if BW::Device.camera.front? or BW::Device.camera.rear?
-        @action_sheet.addButtonWithTitle CHOOSE
-        @action_sheet.cancelButtonIndex = (@action_sheet.addButtonWithTitle CANCEL)
+        ##################################
+        # 10/01/13 ksi
+        #@action_sheet = UIActionSheet.alloc.init
+        #@action_sheet.delegate = self
+        # Check the device - will not work on iPad
+        if Device.iphone? || !Device.iphone?
+          @action_sheet = UIActionSheet.alloc.init
+          @action_sheet.delegate = self
 
-        @action_sheet.showInView @image_view
+          @action_sheet.destructiveButtonIndex = (@action_sheet.addButtonWithTitle "Delete") if row.value
+          @action_sheet.addButtonWithTitle "Take" # if BW::Device.camera.front? or BW::Device.camera.rear?
+          @action_sheet.addButtonWithTitle "Choose"
+          @action_sheet.cancelButtonIndex = (@action_sheet.addButtonWithTitle "Cancel")
+
+          @action_sheet.showInView @image_view
+        else
+          @image_picker = UIImagePickerController.alloc.init
+          @image_picker.delegate = self
+
+          @popover = UIPopoverController.alloc.initWithContentViewController(@image_picker)
+          @popover.delegate = self
+          @popover.presentPopoverFromRect(@add_button.frame, inView:@image_view, permittedArrowDirections:0, animated:true)
+        end
+
+        #@action_sheet.destructiveButtonIndex = (@action_sheet.addButtonWithTitle DELETE) if row.value
+        #@action_sheet.addButtonWithTitle TAKE if BW::Device.camera.front? or BW::Device.camera.rear?
+        #@action_sheet.addButtonWithTitle CHOOSE
+        #@action_sheet.cancelButtonIndex = (@action_sheet.addButtonWithTitle CANCEL)
+        #@action_sheet.showInView @image_view
+        ##################################
+      end
+
+      def imagePickerController(picker, didFinishPickingMediaWithInfo: info)
+        @changed = true
+        image = info.valueForKey("UIImagePickerControllerOriginalImage")
+        row.value = image
+        @popover.dismissPopoverAnimated(true)
+      end
+
+      def popoverControllerDidDismissPopover( popoverController )
+        @popover = nil
       end
 
       def actionSheet actionSheet, clickedButtonAtIndex: index
@@ -81,7 +136,20 @@ module Formotion
         when TAKE
           source = :camera
         when CHOOSE
-          source = :photo_library
+          ##################################
+          # 10/01/13 ksi
+          #source = :photo_library
+          if Device.iphone?
+            source = :photo_library
+          else
+            @image_picker = UIImagePickerController.alloc.init
+            @image_picker.delegate = self
+
+            @popover = UIPopoverController.alloc.initWithContentViewController(@image_picker)
+            @popover.delegate = self
+            @popover.presentPopoverFromRect(@add_button.frame, inView:@image_view, permittedArrowDirections:0, animated:true)
+          end
+          ##################################
         when CANCEL
         else
           p "Unrecognized button title #{actionSheet.buttonTitleAtIndex(index)}"
@@ -95,6 +163,10 @@ module Formotion
               if result[:original_image].respond_to?(:resize_image_to_size) and row.max_image_size
                 result[:original_image]=result[:original_image].resize_image_to_size(row.max_image_size, false)
               end
+              ##################################
+              # 10/01/13 ksi
+              @changed = true
+              ##################################
               row.value = result[:original_image]
             end
           end
